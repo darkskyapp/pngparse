@@ -1,6 +1,6 @@
 var zlib = require("zlib")
 
-function parse(buf, callback, debug) {
+exports.parse = function(buf, callback, debug) {
   /* Sanity check PNG header. */
   if(buf.readUInt32BE(0) !== 0x89504E47 ||
      buf.readUInt32BE(4) !== 0x0D0A1A0A)
@@ -97,14 +97,3 @@ function parse(buf, callback, debug) {
     return callback(null, width, height, pixels)
   })
 }
-
-parse(
-  require("fs").readFileSync("foo.png"),
-  function(err, width, height, data) {
-    if(err)
-      throw err
-
-    console.log(width, height, data)
-  },
-  true
-)
