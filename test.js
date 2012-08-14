@@ -10,22 +10,24 @@ describe("PNG", function() {
         if(err)
           return done(err)
 
-        png.parse(data, function(err, width, height, data) {
+        png.parse(data, function(err, id) {
           assert.isNull(err)
-          assert.equal(width, 16)
-          assert.equal(height, 16)
+          assert.equal(id.width, 16)
+          assert.equal(id.height, 16)
 
           var i = 16 * 16 * 4,
               y = 16,
               x
 
+          assert.equal(id.data.length, i)
+
           while(y--) {
             x = 16
             while(x--) {
-              assert.equal(data[--i], 255)
-              assert.equal(data[--i], (x ^ y) * 17)
-              assert.equal(data[--i], y * 17)
-              assert.equal(data[--i], x * 17)
+              assert.equal(id.data[--i], 255)
+              assert.equal(id.data[--i], (x ^ y) * 17)
+              assert.equal(id.data[--i], y * 17)
+              assert.equal(id.data[--i], x * 17)
             }
           }
 

@@ -1,5 +1,13 @@
 var zlib = require("zlib")
 
+function ImageData(width, height, data) {
+  this.width  = width
+  this.height = height
+  this.data   = data
+}
+
+/* FIXME: Some pixel retrieval methods might be handy! */
+
 exports.parse = function(buf, callback, debug) {
   /* Sanity check PNG header. */
   if(buf.readUInt32BE(0) !== 0x89504E47 ||
@@ -94,6 +102,6 @@ exports.parse = function(buf, callback, debug) {
     if(i !== 0 || j !== 0)
       return callback(new Error("Copy error: extraneous or insufficient data."))
 
-    return callback(null, width, height, pixels)
+    return callback(null, new ImageData(width, height, pixels))
   })
 }
