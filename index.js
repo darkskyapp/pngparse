@@ -35,17 +35,19 @@ exports.parse = function(buf, callback, debug) {
   if(buf.readUInt8(28) !== 0)
     return callback(new Error("Unsupported interlace method."))
 
-  var mode = buf.readUInt8(25)
-
-  if(mode !== 2)
-    return callback(new Error("Unsupported mode combination: " + mode + "."))
-
   var width  = buf.readUInt32BE(16),
       height = buf.readUInt32BE(20),
+      mode   = buf.readUInt8(25),
       i
 
   if(debug)
-    console.warn("PNG is %dx%d, %d-bit, mode %d.", width, height, depth, mode)
+    console.warn(
+      "PNG is %dx%d, %d-bit, color type %d.",
+      width,
+      height,
+      depth,
+      mode
+    )
 
   /* Determinte data length. */
   var off, len
@@ -87,19 +89,41 @@ exports.parse = function(buf, callback, debug) {
     var j      = data.length,
         i      = width * height * 4,
         pixels = new Buffer(i),
-        y      = height,
-        x
+        x, y
 
-    while(y--) {
-      x = width
-      while(x--) {
-        pixels[--i] = 255
-        pixels[--i] = data[--j]
-        pixels[--i] = data[--j]
-        pixels[--i] = data[--j]
-      }
+    switch(mode) {
+      case 0:
+        y = height
+        while(y--) {
+          x = width
+          while(x--) {
+            pixels[--i] = 255
+            pixels[--i] = data[--j]
+            pixels[--i] = data[  j]
+            pixels[--i] = data[  j]
+          }
 
-      --j
+          --j
+        }
+        break
+
+      case 2:
+        y = height
+        while(y--) {
+          x = width
+          while(x--) {
+            pixels[--i] = 255
+            pixels[--i] = data[--j]
+            pixels[--i] = data[--j]
+            pixels[--i] = data[--j]
+          }
+
+          --j
+        }
+        break
+
+      default:
+        throw new Error("Unsupported color type: " + mode + ".")
     }
 
     if(i !== 0 || j !== 0)
