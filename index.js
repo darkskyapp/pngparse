@@ -86,62 +86,92 @@ exports.parse = function(buf, callback, debug) {
     if(debug)
       console.warn("Inflated data length is %d bytes.", data.length)
 
-    var j      = data.length,
-        i      = width * height * 4,
-        pixels = new Buffer(i),
-        x, y
+    var pixels = new Buffer(width * height * 4),
+        i = 0,
+        j = 0,
+        x, y, filter, r, g, b, a
 
-    switch(mode) {
-      case 0:
-        y = height
-        while(y--) {
-          x = width
-          while(x--) {
-            pixels[--i] = 255
-            pixels[--i] = data[--j]
-            pixels[--i] = data[  j]
-            pixels[--i] = data[  j]
-          }
+    for(y = 0; y !== height; ++y) {
+      filter = data[j++]
 
-          --j
+      r = 0
+      g = 0
+      b = 0
+      a = 0
+
+      for(x = 0; x !== width; ++x) {
+        switch(mode) {
+          case 0:
+            switch(filter) {
+              case 0:
+                r = data[j++]
+                break
+
+              case 1:
+                r = (data[j++] + r) % 256
+                break
+
+              default:
+                return callback(new Error("Unsupported scanline filter: " + filter + "."))
+            }
+            g = r
+            b = r
+            a = 255
+            break
+
+          case 2:
+            switch(filter) {
+              case 0:
+                r = data[j++]
+                g = data[j++]
+                b = data[j++]
+                break
+
+              case 1:
+                r = (data[j++] + r) % 256
+                g = (data[j++] + g) % 256
+                b = (data[j++] + b) % 256
+                break
+
+              default:
+                return callback(new Error("Unsupported scanline filter: " + filter + "."))
+            }
+            a = 255
+            break
+
+          case 6:
+            switch(filter) {
+              case 0:
+                r = data[j++]
+                g = data[j++]
+                b = data[j++]
+                a = data[j++]
+                break
+
+              case 1:
+                r = (data[j++] + r) % 256
+                g = (data[j++] + g) % 256
+                b = (data[j++] + b) % 256
+                a = (data[j++] + a) % 256
+                break
+
+              default:
+                return callback(new Error("Unsupported scanline filter: " + filter + "."))
+            }
+            break
+
+          default:
+            return callback(new Error("Unsupported color type: " + mode + "."))
         }
-        break
 
-      case 2:
-        y = height
-        while(y--) {
-          x = width
-          while(x--) {
-            pixels[--i] = 255
-            pixels[--i] = data[--j]
-            pixels[--i] = data[--j]
-            pixels[--i] = data[--j]
-          }
-
-          --j
-        }
-        break
-
-      case 6:
-        y = height
-        while(y--) {
-          x = width
-          while(x--) {
-            pixels[--i] = data[--j]
-            pixels[--i] = data[--j]
-            pixels[--i] = data[--j]
-            pixels[--i] = data[--j]
-          }
-
-          --j
-        }
-        break
-
-      default:
-        return callback(new Error("Unsupported color type: " + mode + "."))
+        pixels[i++] = r
+        pixels[i++] = g
+        pixels[i++] = b
+        pixels[i++] = a
+      }
     }
 
-    if(i !== 0 || j !== 0)
+    if(i !== pixels.length || j !== data.length)
       return callback(new Error("Copy error: extraneous or insufficient data."))
 
     return callback(null, new ImageData(width, height, pixels))
