@@ -32,7 +32,7 @@ describe("PNG", function() {
           }
 
           done()
-        }, true)
+        })
       })
     })
 
@@ -57,6 +57,37 @@ describe("PNG", function() {
             while(x--) {
               assert.equal(id.data[--i], 255)
               assert.equal(id.data[--i], (x ^ y) * 17)
+              assert.equal(id.data[--i], y * 17)
+              assert.equal(id.data[--i], x * 17)
+            }
+          }
+
+          done()
+        })
+      })
+    })
+
+    it("should correctly parse an 8-bit truecolor png with alpha", function(done) {
+      fs.readFile(path.join(__dirname, "truecoloralpha.png"), function(err, data) {
+        if(err)
+          return done(err)
+
+        png.parse(data, function(err, id) {
+          assert.isNull(err)
+          assert.equal(id.width, 16)
+          assert.equal(id.height, 16)
+
+          var i = 16 * 16 * 4,
+              y = 16,
+              x
+
+          assert.equal(id.data.length, i)
+
+          while(y--) {
+            x = 16
+            while(x--) {
+              assert.equal(id.data[--i], (x ^ y) * 17)
+              assert.equal(id.data[--i], 0)
               assert.equal(id.data[--i], y * 17)
               assert.equal(id.data[--i], x * 17)
             }

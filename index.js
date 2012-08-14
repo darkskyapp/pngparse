@@ -122,8 +122,23 @@ exports.parse = function(buf, callback, debug) {
         }
         break
 
+      case 6:
+        y = height
+        while(y--) {
+          x = width
+          while(x--) {
+            pixels[--i] = data[--j]
+            pixels[--i] = data[--j]
+            pixels[--i] = data[--j]
+            pixels[--i] = data[--j]
+          }
+
+          --j
+        }
+        break
+
       default:
-        throw new Error("Unsupported color type: " + mode + ".")
+        return callback(new Error("Unsupported color type: " + mode + "."))
     }
 
     if(i !== 0 || j !== 0)
