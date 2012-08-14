@@ -22,6 +22,10 @@ exports.parse = function(buf, callback, debug) {
      buf.readUInt32BE(12) !== 0x49484452)
     return callback(new Error("First PNG chunk is not IHDR."))
 
+  var depth = buf.readUInt8(24)
+  if(depth !== 8)
+    return callback(new Error("Unsupported bit depth: " + depth + "."))
+
   if(buf.readUInt8(26) !== 0)
     return callback(new Error("Unsupported compression method."))
 
@@ -31,11 +35,10 @@ exports.parse = function(buf, callback, debug) {
   if(buf.readUInt8(28) !== 0)
     return callback(new Error("Unsupported interlace method."))
 
-  var depth  = buf.readUInt8(24),
-      mode   = buf.readUInt8(25)
+  var mode = buf.readUInt8(25)
 
-  if(depth !== 8 && mode !== 2)
-    return callback(new Error("Unsupported mode and depth combination: " + mode + "," + depth + "."))
+  if(mode !== 2)
+    return callback(new Error("Unsupported mode combination: " + mode + "."))
 
   var width  = buf.readUInt32BE(16),
       height = buf.readUInt32BE(20),
