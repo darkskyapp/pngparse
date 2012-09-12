@@ -214,11 +214,15 @@ exports.parse = function(buf, callback, debug) {
           for(j = 1; j !== skip; ++j) {
             k = y * skip + j
 
+            var q = data[k]
             data[k] = (data[k] + paeth(
               j > bpp && data[k - bpp],
               y && data[k - skip],
               j > bpp && y && data[k - skip - bpp]
             )) & 255
+
+            if(debug && Math.floor((j - 1) / samples) === 153 && y === 168)
+              console.log("%d = (%d + paeth(%d, %d, %d)) mod 256", data[k], q, j > bpp && data[k - bpp], y && data[k - skip], j > bpp && y && data[k - skip - bpp])
           }
           break
 
@@ -250,6 +254,9 @@ exports.parse = function(buf, callback, debug) {
             default:
               return callback(new Error("Unsupported bit depth: " + depth))
           }
+
+        if(debug && x === 153 && y == 168)
+          console.log(samp)
 
         /* Apply samples to the image data. */
         /* FIXME: All of these except case 3 need to be normalized to the bit
