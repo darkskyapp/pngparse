@@ -16,7 +16,7 @@ function paeth(a, b, c) {
       pb = Math.abs(p - b),
       pc = Math.abs(p - c)
 
-  if(pa <= pb && pa <= pc)
+  if((pa <= pb) && (pa <= pc))
     return a
 
   if(pb <= pc)
@@ -220,9 +220,6 @@ exports.parse = function(buf, callback, debug) {
               y && data[k - skip],
               j > bpp && y && data[k - skip - bpp]
             )) & 255
-
-            if(debug && Math.floor((j - 1) / samples) === 153 && y === 168)
-              console.log("%d = (%d + paeth(%d, %d, %d)) mod 256", data[k], q, j > bpp && data[k - bpp], y && data[k - skip], j > bpp && y && data[k - skip - bpp])
           }
           break
 
@@ -254,9 +251,6 @@ exports.parse = function(buf, callback, debug) {
             default:
               return callback(new Error("Unsupported bit depth: " + depth))
           }
-
-        if(debug && x === 153 && y == 168)
-          console.log(samp)
 
         /* Apply samples to the image data. */
         /* FIXME: All of these except case 3 need to be normalized to the bit
