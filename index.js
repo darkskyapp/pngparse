@@ -204,7 +204,7 @@ exports.parse = function(buf, callback, debug) {
           for(j = 1; j !== skip; ++j) {
             k = y * skip + j
             data[k] = (data[k] + ((
-              (x === 0 ? 0 : data[k - bpp]) +
+              (j <= bpp ? 0 : data[k - bpp]) +
               (y === 0 ? 0 : data[k - skip])
             ) >> 1)) & 255
           }
@@ -213,10 +213,11 @@ exports.parse = function(buf, callback, debug) {
         case 4:
           for(j = 1; j !== skip; ++j) {
             k = y * skip + j
+
             data[k] = (data[k] + paeth(
-              x === 0 ? 0 : data[k - bpp],
-              y === 0 ? 0 : data[k - skip],
-              x === 0 || y === 0 ? 0 : data[k - skip - bpp]
+              j > bpp && data[k - bpp],
+              y && data[k - skip],
+              j > bpp && y && data[k - skip - bpp]
             )) & 255
           }
           break
