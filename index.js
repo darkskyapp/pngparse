@@ -204,8 +204,8 @@ exports.parse = function(buf, callback, debug) {
           for(j = 1; j !== skip; ++j) {
             k = y * skip + j
             data[k] = (data[k] + ((
-              (j <= bpp ? 0 : data[k - bpp]) +
-              (y === 0 ? 0 : data[k - skip])
+              (j > bpp && data[k - bpp]) +
+              (y && data[k - skip])
             ) >> 1)) & 255
           }
           break
