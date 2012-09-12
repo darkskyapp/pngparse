@@ -10,6 +10,21 @@ ImageData.prototype.getPixel = function(x, y) {
   return this.data.readUInt32BE((y * this.width + x) * 4)
 }
 
+function paeth(a, b, c) {
+  var p  = a + b - c,
+      pa = Math.abs(p - a),
+      pb = Math.abs(p - b),
+      pc = Math.abs(p - c)
+
+  if(pa <= pb && pa <= pc)
+    return a
+
+  if(pb <= pc)
+    return b
+
+  return c
+}
+
 exports.parse = function(buf, callback, debug) {
   /* Sanity check PNG header. */
   if(buf.readUInt32BE(0) !== 0x89504E47 ||
@@ -171,26 +186,39 @@ exports.parse = function(buf, callback, debug) {
           break
 
         case 1:
-          for(j = bpp; j !== skip; ++j) {
-            k = y * skip + 1 + j
+          for(j = bpp + 1; j !== skip; ++j) {
+            k = y * skip + j
             data[k] = (data[k] + data[k - bpp]) & 255
           }
           break
 
         case 2:
           if(y !== 0)
-            for(j = 0; j !== skip; ++j) {
-              k = y * skip + 1 + j
+            for(j = 1; j !== skip; ++j) {
+              k = y * skip + j
               data[k] = (data[k] + data[k - skip]) & 255
             }
           break
 
         case 3:
-          if(y !== 0)
-            for(j = bpp; j !== skip; ++j) {
-              k = y * skip + 1 + j
-              data[k] = (data[k] + ((data[k - skip] + data[k - bpp]) >> 1)) & 255
-            }
+          for(j = 1; j !== skip; ++j) {
+            k = y * skip + j
+            data[k] = (data[k] + ((
+              (x === 0 ? 0 : data[k - bpp]) +
+              (y === 0 ? 0 : data[k - skip])
+            ) >> 1)) & 255
+          }
+          break
+
+        case 4:
+          for(j = 1; j !== skip; ++j) {
+            k = y * skip + j
+            data[k] = (data[k] + paeth(
+              x === 0 ? 0 : data[k - bpp],
+              y === 0 ? 0 : data[k - skip],
+              x === 0 || y === 0 ? 0 : data[k - skip - bpp]
+            )) & 255
+          }
           break
 
         default:
@@ -201,8 +229,6 @@ exports.parse = function(buf, callback, debug) {
       for(x = 0; x !== width; ++x) {
         /* Read samples. */
         for(j = 0; j !== samples; ++off, ++j)
-          /* FIXME: I need to test cases 1, 2, and 4... I have no way to know
-           * whether they're correct or not! */
           switch(depth) {
             case 1:
               samp[j] = (data[y * skip + 1 + (off >> 3)] >> (7 - (off & 7))) & 1
@@ -225,6 +251,8 @@ exports.parse = function(buf, callback, debug) {
           }
 
         /* Apply samples to the image data. */
+        /* FIXME: All of these except case 3 need to be normalized to the bit
+         * depth. */
         switch(mode) {
           case 0:
             pixels[i++] = samp[0]

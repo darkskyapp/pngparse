@@ -181,5 +181,26 @@ describe("PNG", function() {
         })
       })
     })
+
+    it("should correctly support crazily-filtered images", function(done) {
+      fs.readFile(path.join(__dirname, "paeth.png"), function(err, data) {
+        if(err)
+          return done(err)
+
+        png.parse(data, function(err, id) {
+          assert.isNull(err)
+          assert.equal(id.width, 512)
+          assert.equal(id.height, 512)
+          assert.equal(id.data.length, 512 * 512 * 4)
+
+          assert.equal(id.getPixel(263, 319), 0xFF002100)
+          assert.equal(id.getPixel(145, 318), 0x05535A00)
+          assert.equal(id.getPixel(395, 286), 0x0007FF00)
+          assert.equal(id.getPixel(158, 168), 0x04313900)
+
+          done()
+        })
+      })
+    })
   })
 })
