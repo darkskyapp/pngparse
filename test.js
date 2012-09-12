@@ -143,5 +143,43 @@ describe("PNG", function() {
         })
       })
     })
+
+    it("should correctly read an indexed color image with alpha", function(done) {
+      fs.readFile(path.join(__dirname, "indexedalpha.png"), function(err, data) {
+        if(err)
+          return done(err)
+
+        png.parse(data, function(err, id) {
+          assert.isNull(err)
+          assert.equal(id.width, 16)
+          assert.equal(id.height, 16)
+          assert.equal(id.data.length, 16 * 16 * 4)
+
+          var y = 16,
+              x
+
+          while(y--) {
+            x = 16
+            while(x--)
+              if(x >= 4 && x < 12)
+                assert.equal(id.getPixel(x, y), 0x00000000)
+
+              else if(x + y < 8)
+                assert.equal(id.getPixel(x, y), 0xFF0000FF)
+
+              else if(x + y < 16)
+                assert.equal(id.getPixel(x, y), 0x00FF00FF)
+
+              else if(x + y < 24)
+                assert.equal(id.getPixel(x, y), 0x0000FFFF)
+
+              else
+                assert.equal(id.getPixel(x, y), 0x000000FF)
+          }
+
+          done()
+        })
+      })
+    })
   })
 })

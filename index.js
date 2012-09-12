@@ -104,7 +104,20 @@ exports.parse = function(buf, callback, debug) {
     if(debug)
       console.warn("PNG color palette has %d entries.", plen)
 
-    /* FIXME: Check for a tRNS section, too. */
+    /* Check for a tRNS section, too. */
+    for(off = 33; off < buf.length; off += len + 12) {
+      len = buf.readUInt32BE(off)
+
+      if(buf.readUInt32BE(off + 4) === 0x74524E53) {
+        aoff = off + 8
+        alen = len
+
+        if(debug)
+          console.warn("PNG also has a tranparency palette with %d entries.", alen)
+
+        break
+      }
+    }
   }
 
   /* Determine data length. */
@@ -234,9 +247,7 @@ exports.parse = function(buf, callback, debug) {
             pixels[i++] = buf[poff + samp[0] * 3 + 0]
             pixels[i++] = buf[poff + samp[0] * 3 + 1]
             pixels[i++] = buf[poff + samp[0] * 3 + 2]
-
-            /* FIXME: support indexed transparency! */
-            pixels[i++] = 255
+            pixels[i++] = samp[0] < alen ? buf[aoff + samp[0]] : 255
             break
 
           case 4:
