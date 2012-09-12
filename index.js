@@ -6,7 +6,9 @@ function ImageData(width, height, data) {
   this.data   = data
 }
 
-/* FIXME: Some pixel retrieval methods might be handy! */
+ImageData.prototype.getPixel = function(x, y) {
+  return this.data.readUInt32BE((y * this.width + x) * 4)
+}
 
 exports.parse = function(buf, callback, debug) {
   /* Sanity check PNG header. */
@@ -190,15 +192,15 @@ exports.parse = function(buf, callback, debug) {
            * whether they're correct or not! */
           switch(depth) {
             case 1:
-              samp[k] = (data[y * skip + 1 + (off >> 3)] >> (7 - (off & 7))) & 1
+              samp[j] = (data[y * skip + 1 + (off >> 3)] >> (7 - (off & 7))) & 1
               break
 
             case 2:
-              samp[k] = (data[y * skip + 1 + (off >> 2)] >> ((3 - (off & 3)) << 1)) & 3
+              samp[j] = (data[y * skip + 1 + (off >> 2)] >> ((3 - (off & 3)) << 1)) & 3
               break
 
             case 4:
-              samp[k] = (data[y * skip + 1 + (off >> 1)] >> ((1 - (off & 1)) << 2)) & 15
+              samp[j] = (data[y * skip + 1 + (off >> 1)] >> ((1 - (off & 1)) << 2)) & 15
               break
 
             case 8:
@@ -229,9 +231,9 @@ exports.parse = function(buf, callback, debug) {
             if(samp[0] >= plen)
               return callback(new Error("Invalid palette index recorded."))
 
-            pixels[i++] = data[poff + samp[0] * 3 + 0]
-            pixels[i++] = data[poff + samp[0] * 3 + 1]
-            pixels[i++] = data[poff + samp[0] * 3 + 2]
+            pixels[i++] = buf[poff + samp[0] * 3 + 0]
+            pixels[i++] = buf[poff + samp[0] * 3 + 1]
+            pixels[i++] = buf[poff + samp[0] * 3 + 2]
 
             /* FIXME: support indexed transparency! */
             pixels[i++] = 255

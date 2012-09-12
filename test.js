@@ -14,21 +14,15 @@ describe("PNG", function() {
           assert.isNull(err)
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
+          assert.equal(id.data.length, 16 * 16 * 4)
 
-          var i = 16 * 16 * 4,
-              y = 16,
+          var y = 16,
               x
-
-          assert.equal(id.data.length, i)
 
           while(y--) {
             x = 16
-            while(x--) {
-              assert.equal(id.data[--i], 255)
-              assert.equal(id.data[--i], (x ^ y) * 17)
-              assert.equal(id.data[--i], (x ^ y) * 17)
-              assert.equal(id.data[--i], (x ^ y) * 17)
-            }
+            while(x--)
+              assert.equal(id.getPixel(x, y), (x ^ y) * 286331136 + 255)
           }
 
           done()
@@ -45,21 +39,18 @@ describe("PNG", function() {
           assert.isNull(err)
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
+          assert.equal(id.data.length, 16 * 16 * 4)
 
-          var i = 16 * 16 * 4,
-              y = 16,
+          var y = 16,
               x
-
-          assert.equal(id.data.length, i)
 
           while(y--) {
             x = 16
-            while(x--) {
-              assert.equal(id.data[--i], 255)
-              assert.equal(id.data[--i], (x ^ y) * 17)
-              assert.equal(id.data[--i], y * 17)
-              assert.equal(id.data[--i], x * 17)
-            }
+            while(x--)
+              assert.equal(
+                id.getPixel(x, y),
+                x * 285212672 + y * 1114112 + (x ^ y) * 4352 + 255
+              )
           }
 
           done()
@@ -76,21 +67,18 @@ describe("PNG", function() {
           assert.isNull(err)
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
+          assert.equal(id.data.length, 16 * 16 * 4)
 
-          var i = 16 * 16 * 4,
-              y = 16,
+          var y = 16,
               x
-
-          assert.equal(id.data.length, i)
 
           while(y--) {
             x = 16
-            while(x--) {
-              assert.equal(id.data[--i], (x ^ y) * 17)
-              assert.equal(id.data[--i], 0)
-              assert.equal(id.data[--i], y * 17)
-              assert.equal(id.data[--i], x * 17)
-            }
+            while(x--)
+              assert.equal(
+                id.getPixel(x, y),
+                x * 285212672 + y * 1114112 + (x ^ y) * 17
+              )
           }
 
           done()
@@ -107,36 +95,49 @@ describe("PNG", function() {
           assert.isNull(err)
           assert.equal(id.width, 1024)
           assert.equal(id.height, 1024)
+          assert.equal(id.data.length, 1024 * 1024 * 4)
 
-          assert.equal(id.data[0], 255, "0,0 should have 255 red")
-          assert.equal(id.data[1],   0, "0,0 should have 0 green")
-          assert.equal(id.data[2],   0, "0,0 should have 0 blue")
-          assert.equal(id.data[3], 255, "0,0 should have 255 alpha")
+          assert.equal(id.getPixel(  0,   0), 0xFF0000FF)
+          assert.equal(id.getPixel(  1,   0), 0xFF0000FF)
+          assert.equal(id.getPixel(420, 308), 0xFF0029FF)
+          assert.equal(id.getPixel(433, 308), 0x0A299DFF)
+          assert.equal(id.getPixel(513, 308), 0x0066FFFF)
+          assert.equal(id.getPixel(728, 552), 0xFF0047FF)
 
-          assert.equal(id.data[4], 255, "1,0 should have 255 red")
-          assert.equal(id.data[5],   0, "1,0 should have 0 green")
-          assert.equal(id.data[6],   0, "1,0 should have 0 blue")
-          assert.equal(id.data[7], 255, "1,0 should have 255 alpha")
+          done()
+        })
+      })
+    })
 
-          assert.equal(id.data[1263248], 255, "420,308 should have 255 red")
-          assert.equal(id.data[1263249],   0, "420,308 should have 0 green")
-          assert.equal(id.data[1263250],  41, "420,308 should have 41 blue")
-          assert.equal(id.data[1263251], 255, "420,308 should have 255 alpha")
+    it("should correctly read an indexed color image", function(done) {
+      fs.readFile(path.join(__dirname, "indexed.png"), function(err, data) {
+        if(err)
+          return done(err)
 
-          assert.equal(id.data[1263300],  10, "433,308 should have 10 red")
-          assert.equal(id.data[1263301],  41, "433,308 should have 41 green")
-          assert.equal(id.data[1263302], 157, "433,308 should have 157 blue")
-          assert.equal(id.data[1263303], 255, "433,308 should have 255 alpha")
+        png.parse(data, function(err, id) {
+          assert.isNull(err)
+          assert.equal(id.width, 16)
+          assert.equal(id.height, 16)
+          assert.equal(id.data.length, 16 * 16 * 4)
 
-          assert.equal(id.data[1263620],   0, "513,308 should have 0 red")
-          assert.equal(id.data[1263621], 102, "513,308 should have 102 green")
-          assert.equal(id.data[1263622], 255, "513,308 should have 255 blue")
-          assert.equal(id.data[1263623], 255, "513,308 should have 255 alpha")
+          var y = 16,
+              x
 
-          assert.equal(id.data[2263904], 255, "728,552 should have 255 red")
-          assert.equal(id.data[2263905],   0, "728,552 should have 0 green")
-          assert.equal(id.data[2263906],  71, "728,552 should have 71 blue")
-          assert.equal(id.data[2263907], 255, "728,552 should have 255 alpha")
+          while(y--) {
+            x = 16
+            while(x--)
+              if(x + y < 8)
+                assert.equal(id.getPixel(x, y), 0xFF0000FF)
+
+              else if(x + y < 16)
+                assert.equal(id.getPixel(x, y), 0x00FF00FF)
+
+              else if(x + y < 24)
+                assert.equal(id.getPixel(x, y), 0x0000FFFF)
+
+              else
+                assert.equal(id.getPixel(x, y), 0x000000FF)
+          }
 
           done()
         })
