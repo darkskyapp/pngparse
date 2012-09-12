@@ -173,6 +173,7 @@ exports.parse = function(buf, callback, debug) {
     var pixels = new Buffer(width * height * 4),
         skip   = Math.ceil(width * depth * samples / 8) + 1,
         samp   = new Array(samples),
+        mul    = 255 / ((1 << depth) - 1),
         i = 0,
         x, y, j, filter, off, k
 
@@ -214,7 +215,6 @@ exports.parse = function(buf, callback, debug) {
           for(j = 1; j !== skip; ++j) {
             k = y * skip + j
 
-            var q = data[k]
             data[k] = (data[k] + paeth(
               j > bpp && data[k - bpp],
               y && data[k - skip],
@@ -253,20 +253,18 @@ exports.parse = function(buf, callback, debug) {
           }
 
         /* Apply samples to the image data. */
-        /* FIXME: All of these except case 3 need to be normalized to the bit
-         * depth. */
         switch(mode) {
           case 0:
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[0]
+            pixels[i++] =
+            pixels[i++] =
+            pixels[i++] = samp[0] * mul
             pixels[i++] = 255
             break
 
           case 2:
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[1]
-            pixels[i++] = samp[2]
+            pixels[i++] = samp[0] * mul
+            pixels[i++] = samp[1] * mul
+            pixels[i++] = samp[2] * mul
             pixels[i++] = 255
             break
 
@@ -281,17 +279,17 @@ exports.parse = function(buf, callback, debug) {
             break
 
           case 4:
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[1]
+            pixels[i++] =
+            pixels[i++] =
+            pixels[i++] = samp[0] * mul
+            pixels[i++] = samp[1] * mul
             break
 
           case 6:
-            pixels[i++] = samp[0]
-            pixels[i++] = samp[1]
-            pixels[i++] = samp[2]
-            pixels[i++] = samp[3]
+            pixels[i++] = samp[0] * mul
+            pixels[i++] = samp[1] * mul
+            pixels[i++] = samp[2] * mul
+            pixels[i++] = samp[3] * mul
             break
         }
       }
