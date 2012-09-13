@@ -8,6 +8,11 @@ function ImageData(width, height, data, trailer) {
 }
 
 ImageData.prototype.getPixel = function(x, y) {
+  if(x < -0.5 || y < -0.5 || x >= this.width - 0.5 || y >= this.height - 0.5)
+    return 0
+
+  x = Math.round(x)
+  y = Math.round(y)
   return this.data.readUInt32BE((y * this.width + x) * 4)
 }
 
