@@ -1,9 +1,10 @@
 var zlib = require("zlib")
 
-function ImageData(width, height, data) {
-  this.width  = width
-  this.height = height
-  this.data   = data
+function ImageData(width, height, data, trailer) {
+  this.width   = width
+  this.height  = height
+  this.data    = data
+  this.trailer = trailer
 }
 
 ImageData.prototype.getPixel = function(x, y) {
@@ -133,6 +134,8 @@ exports.parse = function(buf, callback, debug) {
   }
 
   /* Determine data length. */
+  var toff = buf.length
+
   i = 0
   for(off = 33; off < buf.length; off += len + 12) {
     len   = buf.readUInt32BE(off)
@@ -143,8 +146,10 @@ exports.parse = function(buf, callback, debug) {
       i += len
 
     /* IEND */
-    else if(chunk === 0x49454E44)
+    else if(chunk === 0x49454E44) {
+      toff = off + len + 12
       break
+    }
   }
 
   if(debug)
@@ -307,6 +312,6 @@ exports.parse = function(buf, callback, debug) {
     if(i !== pixels.length)
       return callback(new Error("Copy error: extraneous or insufficient data."))
 
-    return callback(null, new ImageData(width, height, pixels))
+    return callback(null, new ImageData(width, height, pixels, buf.slice(toff)))
   })
 }

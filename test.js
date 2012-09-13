@@ -15,6 +15,7 @@ describe("PNG", function() {
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
           assert.equal(id.data.length, 16 * 16 * 4)
+          assert.equal(id.trailer.toString(), "Hello, world!\n")
 
           var y = 16,
               x
@@ -40,6 +41,7 @@ describe("PNG", function() {
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
           assert.equal(id.data.length, 16 * 16 * 4)
+          assert.equal(id.trailer.length, 0)
 
           var y = 16,
               x
@@ -68,6 +70,7 @@ describe("PNG", function() {
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
           assert.equal(id.data.length, 16 * 16 * 4)
+          assert.equal(id.trailer.length, 0)
 
           var y = 16,
               x
@@ -96,6 +99,7 @@ describe("PNG", function() {
           assert.equal(id.width, 1024)
           assert.equal(id.height, 1024)
           assert.equal(id.data.length, 1024 * 1024 * 4)
+          assert.equal(id.trailer.length, 0)
 
           assert.equal(id.getPixel(  0,   0), 0xFF0000FF)
           assert.equal(id.getPixel(  1,   0), 0xFF0000FF)
@@ -119,6 +123,7 @@ describe("PNG", function() {
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
           assert.equal(id.data.length, 16 * 16 * 4)
+          assert.equal(id.trailer.length, 0)
 
           var y = 16,
               x
@@ -154,6 +159,7 @@ describe("PNG", function() {
           assert.equal(id.width, 16)
           assert.equal(id.height, 16)
           assert.equal(id.data.length, 16 * 16 * 4)
+          assert.equal(id.trailer.length, 0)
 
           var y = 16,
               x
