@@ -1,6 +1,6 @@
 {
   "name" : "pngparse",
-  "version" : "0.7.2",
+  "version" : "0.8.0",
   "description" : "convert PNG images to pixel arrays without dependencies",
   "keywords" : [
     "png",

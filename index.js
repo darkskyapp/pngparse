@@ -1,4 +1,5 @@
-var zlib = require("zlib")
+var fs   = require("fs"),
+    zlib = require("zlib")
 
 function ImageData(width, height, data, trailer) {
   this.width   = width
@@ -319,5 +320,14 @@ exports.parse = function(buf, callback, debug) {
       return callback(new Error("Copy error: extraneous or insufficient data."))
 
     return callback(null, new ImageData(width, height, pixels, buf.slice(toff)))
+  })
+}
+
+exports.parseFile = function(pathname, callback) {
+  return fs.readFile(pathname, function(err, data) {
+    if(err)
+      return callback(err)
+
+    return exports.parse(data, callback)
   })
 }

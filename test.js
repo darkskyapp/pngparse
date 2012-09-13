@@ -227,4 +227,17 @@ describe("PNG", function() {
       })
     })
   })
+
+  describe("parseFile", function() {
+    it("should read a file from disk, then parse it", function(done) {
+      png.parseFile(path.join(__dirname, "grayscale.png"), function(err, data) {
+        assert.isNull(err)
+        assert.equal(data.width, 16)
+        assert.equal(data.height, 16)
+        assert.equal(data.data.length, 16 * 16 * 4)
+        assert.equal(data.trailer.toString(), "Hello, world!\n")
+        done()
+      })
+    })
+  })
 })
