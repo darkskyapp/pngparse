@@ -52,7 +52,7 @@ exports.parse = function(buf, callback, debug) {
       height = buf.readUInt32BE(20),
       depth  = buf.readUInt8(24),
       mode   = buf.readUInt8(25),
-      samples, bpp, i, off, len
+      samples, bpp, i, chunk, off, len
 
   switch(mode) {
     case 0:
@@ -101,47 +101,50 @@ exports.parse = function(buf, callback, debug) {
 
   if(mode === 3) {
     for(off = 33; off < buf.length; off += len + 12) {
-      len = buf.readUInt32BE(off)
+      len   = buf.readUInt32BE(off)
+      chunk = buf.readUInt32BE(off + 4)
 
-      if(buf.readUInt32BE(off + 4) === 0x504C5445) {
+      /* PLTE */
+      if(chunk === 0x504C5445) {
         poff = off + 8
         plen = Math.floor(len / 3)
-        break
       }
 
-      if(buf.readUInt32BE(off + 4) === 0x49444154)
+      /* tRNS */
+      else if(chunk === 0x74524E53) {
+        aoff = off + 8
+        alen = len
+      }
+
+      /* IEND */
+      else if(chunk === 0x49454E44)
         break
     }
 
     if(poff === 0 || plen === 0)
       return callback(new Error("Unable to find PNG palette."))
 
-    if(debug)
+    if(debug) {
       console.warn("PNG color palette has %d entries.", plen)
 
-    /* Check for a tRNS section, too. */
-    for(off = 33; off < buf.length; off += len + 12) {
-      len = buf.readUInt32BE(off)
-
-      if(buf.readUInt32BE(off + 4) === 0x74524E53) {
-        aoff = off + 8
-        alen = len
-
-        if(debug)
-          console.warn("PNG also has a tranparency palette with %d entries.", alen)
-
-        break
-      }
+      if(alen)
+        console.warn("PNG tranparency palette has %d entries.", alen)
     }
   }
 
   /* Determine data length. */
   i = 0
   for(off = 33; off < buf.length; off += len + 12) {
-    len = buf.readUInt32BE(off)
+    len   = buf.readUInt32BE(off)
+    chunk = buf.readUInt32BE(off + 4)
 
-    if(buf.readUInt32BE(off + 4) === 0x49444154)
+    /* IDAT */
+    if(chunk === 0x49444154)
       i += len
+
+    /* IEND */
+    else if(chunk === 0x49454E44)
+      break
   }
 
   if(debug)
@@ -152,12 +155,18 @@ exports.parse = function(buf, callback, debug) {
 
   i = 0
   for(off = 33; off < buf.length; off += len + 12) {
-    len = buf.readUInt32BE(off)
+    len   = buf.readUInt32BE(off)
+    chunk = buf.readUInt32BE(off + 4)
 
-    if(buf.readUInt32BE(off + 4) === 0x49444154) {
+    /* IDAT */
+    if(chunk === 0x49444154) {
       buf.copy(data, i, off + 8, off + 8 + len)
       i += len
     }
+
+    /* IEND */
+    else if(chunk === 0x49454E44)
+      break
   }
 
   if(i !== data.length)
