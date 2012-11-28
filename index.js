@@ -101,34 +101,49 @@ exports.parse = function(buf, callback, debug) {
       mode
     )
 
-  /* If we're reading a paletted image, find and read the palette. */
-  var poff = 0,
+  var toff = buf.length,
+      poff = 0,
       plen = 0,
       aoff = 0,
       alen = 0
 
-  if(mode === 3) {
-    for(off = 33; off < buf.length; off += len + 12) {
-      len   = buf.readUInt32BE(off)
-      chunk = buf.readUInt32BE(off + 4)
+  i = 0
+
+  /* Run through the PNG data blocks. We need to figure out how much data there
+   * is (so we can allocate a buffer for it), and we need to locate any
+   * palettes and the end of the PNG buffer (in case there's any trailing data
+   * that we need). */
+  outer: for(off = 33; off < buf.length; off += len + 12) {
+    len   = buf.readUInt32BE(off)
+    chunk = buf.readUInt32BE(off + 4)
+
+    switch(chunk) {
+      /* IDAT */
+      case 0x49444154:
+        i += len
+        break
 
       /* PLTE */
-      if(chunk === 0x504C5445) {
+      case 0x504C5445:
         poff = off + 8
         plen = Math.floor(len / 3)
-      }
+        break
 
       /* tRNS */
-      else if(chunk === 0x74524E53) {
+      case 0x74524E53:
         aoff = off + 8
         alen = len
-      }
+        break
 
       /* IEND */
-      else if(chunk === 0x49454E44)
-        break
+      case 0x49454E44:
+        toff = off + len + 12
+        break outer
     }
+  }
 
+  /* If we're reading a paletted image, make sure we found a palette. */
+  if(mode === 3) {
     if(poff === 0 || plen === 0)
       return callback(new Error("Unable to find PNG palette."))
 
@@ -137,25 +152,6 @@ exports.parse = function(buf, callback, debug) {
 
       if(alen)
         console.warn("PNG tranparency palette has %d entries.", alen)
-    }
-  }
-
-  /* Determine data length. */
-  var toff = buf.length
-
-  i = 0
-  for(off = 33; off < buf.length; off += len + 12) {
-    len   = buf.readUInt32BE(off)
-    chunk = buf.readUInt32BE(off + 4)
-
-    /* IDAT */
-    if(chunk === 0x49444154)
-      i += len
-
-    /* IEND */
-    else if(chunk === 0x49454E44) {
-      toff = off + len + 12
-      break
     }
   }
 
