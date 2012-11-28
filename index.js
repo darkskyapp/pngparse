@@ -127,15 +127,15 @@ exports.parse = function(buf, callback, debug) {
   gz.on("error", callback)
 
   gz.on("data", function(data) {
-    var i, j, x, off
+    var tmp, i, j, x, off
 
     for(i = 0; i !== data.length; ++i) {
       /* Read filter byte. */
       if(b === -1) {
-        filter = data[i]
-
-        if(filter === 4)
-          scanline.copy(previous)
+        filter   = data[i]
+        tmp      = previous
+        previous = scanline
+        scanline = tmp
       }
 
       /* Decompress scanline. */
@@ -153,23 +153,23 @@ exports.parse = function(buf, callback, debug) {
 
           /* Delta up. */
           case 2:
-            scanline[b] = (data[i] + scanline[b]) & 255
+            scanline[b] = (data[i] + previous[b]) & 255
             break
 
           /* Average left and up. */
           case 3:
             scanline[b] = (data[i] +
-              (((b < bpp ? 0 : scanline[b - bpp]) + scanline[b]) >> 1)
+              (((b < bpp ? 0 : scanline[b - bpp]) + previous[b]) >> 1)
             ) & 255
             break
 
           /* Paeth predictor. */
           case 4:
-            scanline[b] = (data[i] + paeth(
-              b < bpp ? 0 : scanline[b - bpp],
-              scanline[b],
-              b < bpp ? 0 : previous[b - bpp]
-            )) & 255
+            scanline[b] = (data[i] +
+              (b < bpp ?
+                previous[b] :
+                paeth(scanline[b - bpp], previous[b], previous[b - bpp]))
+            ) & 255
             break
 
           default:
