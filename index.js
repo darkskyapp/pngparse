@@ -57,29 +57,32 @@ exports.parseStream = function(stream, callback) {
   }
 
   function end() {
-    if(--waiting)
-      return
+    if(!--waiting)
+      return callback(
+        undefined,
+        new ImageData(pngWidth, pngHeight, pngPixels, pngTrailer)
+      )
+  }
 
+  stream.on("error", error)
+  inflate.on("error", error)
+
+  stream.on("end", function() {
     if(!pngPixels)
       return error(new Error("Missing IHDR chunk. (Corrupt PNG?)"))
 
     if(!pngTrailer)
       return error(new Error("Missing IEND chunk. (Corrupt PNG?)"))
 
+    return end()
+  })
+
+  inflate.on("end", function() {
     if(p !== pngPixels.length)
       return error(new Error("Too little pixel data! (Corrupt PNG?)"))
 
-    return callback(
-      undefined,
-      new ImageData(pngWidth, pngHeight, pngPixels, pngTrailer)
-    )
-  }
-
-  stream.on("error", error)
-  inflate.on("error", error)
-
-  stream.on("end", end)
-  inflate.on("end", end)
+    return end()
+  })
 
   stream.on("data", function(data) {
     /* If an error occurred, bail. */
@@ -507,10 +510,10 @@ exports.parseBuffer = function(buf, callback) {
   exports.parseStream(s, callback)
 
   /* Emit the events needed for parsing. */
-  /* FIXME: Need to test that the callback doesn't get called twice if there's
-   * an error. Do I need to wrap "end" somehow? */
   s.emit("data", buf)
-  s.emit("end")
+
+  if(s.readable)
+    s.emit("end")
 }
 
 /* FIXME: This is deprecated. Remove it in 2.0. */
