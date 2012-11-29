@@ -5,7 +5,10 @@ var assert = require("chai").assert,
 
 describe("PNG", function() {
   describe("parseStream", function() {
-    /* FIXME */
+    /* FIXME: Technically, this is tested through all of the other methods, but
+     * it would be nice to forcibly ensure that it works. One simple way would
+     * be just to mock parseStream in calls to parseFile and parseBuffer,
+     * making sure that parseStream gets called. */
   })
 
   describe("parseFile", function() {

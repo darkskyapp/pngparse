@@ -509,9 +509,10 @@ exports.parseBuffer = function(buf, callback) {
   /* Set up the PNG parsing hooks. */
   exports.parseStream(s, callback)
 
-  /* Emit the events needed for parsing. */
+  /* Send the data down the stream. */
   s.emit("data", buf)
 
+  /* If no errors occurred in the data, close the stream. */
   if(s.readable)
     s.emit("end")
 }
