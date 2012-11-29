@@ -1,9 +1,7 @@
-var fs   = require("fs"),
-    zlib = require("zlib")
-
-/* FIXME: We're already halfway to streaming parsing of the PNG... the next
- * step should be to just make the whole thing run off of an input stream. Then
- * we can parse with greater efficiency, especially from disk. */
+var fs     = require("fs"),
+    stream = require("stream"),
+    zlib   = require("zlib"),
+    HEADER = new Buffer("89504e470d0a1a0a", "hex")
 
 function ImageData(width, height, data, trailer) {
   this.width   = width
@@ -37,211 +35,452 @@ function paeth(a, b, c) {
   return c
 }
 
-exports.parse = function(buf, callback, debug) {
-  /* Sanity check PNG header. */
-  if(buf.readUInt32BE(0) !== 0x89504E47 ||
-     buf.readUInt32BE(4) !== 0x0D0A1A0A)
-    return callback(new Error("Invalid PNG header."))
+exports.parseStream = function(stream, callback) {
+  var inflate           = zlib.createInflate(),
+      state             = 0,
+      off               = 0,
+      buf               = new Buffer(13),
+      waiting           = 2,
+      b                 = -1,
+      p                 = 0,
+      pngPaletteEntries = 0,
+      pngAlphaEntries   = 0,
+      chunkLength, pngWidth, pngHeight, pngBitDepth, pngDepthMult,
+      pngColorType, pngPixels, pngSamplesPerPixel, pngBytesPerPixel,
+      pngBytesPerScanline, pngSamples, currentScanline, priorScanline,
+      scanlineFilter, pngTrailer, pngPalette, pngAlpha
 
-  if(debug)
-    console.warn("Verified PNG header.")
-
-  /* Sanity check and read IHDR chunk. */
-  if(buf.readUInt32BE(8)  !== 13 ||
-     buf.readUInt32BE(12) !== 0x49484452)
-    return callback(new Error("First PNG chunk is not IHDR."))
-
-  if(buf.readUInt8(26) !== 0)
-    return callback(new Error("Unsupported compression method."))
-
-  if(buf.readUInt8(27) !== 0)
-    return callback(new Error("Unsupported filter method."))
-
-  if(buf.readUInt8(28) !== 0)
-    return callback(new Error("Unsupported interlace method."))
-
-  var width  = buf.readUInt32BE(16),
-      height = buf.readUInt32BE(20),
-      depth  = buf.readUInt8(24),
-      mode   = buf.readUInt8(25),
-      samples, bpp, i, chunk, off, len
-
-  switch(mode) {
-    case 0:
-      samples = 1
-      bpp     = Math.ceil(depth * 0.125)
-      break
-
-    case 2:
-      samples = 3
-      bpp     = Math.ceil(depth * 0.375)
-      break
-
-    case 3:
-      samples = 1
-      bpp     = 1
-      break
-
-    case 4:
-      samples = 2
-      bpp     = Math.ceil(depth * 0.250)
-      break
-
-    case 6:
-      samples = 4
-      bpp     = Math.ceil(depth * 0.5)
-      break
-
-    default:
-      return callback(new Error("Unsupported color type: " + mode))
+  function error(err) {
+    stream.destroy()
+    inflate.destroy()
+    return callback(err)
   }
 
-  if(debug)
-    console.warn(
-      "PNG is %dx%d, %d-bit, color type %d.",
-      width,
-      height,
-      depth,
-      mode
+  function end() {
+    if(--waiting)
+      return
+
+    if(!pngPixels)
+      return error(new Error("Missing IHDR chunk. (Corrupt PNG?)"))
+
+    if(!pngTrailer)
+      return error(new Error("Missing IEND chunk. (Corrupt PNG?)"))
+
+    if(p !== pngPixels.length)
+      return error(new Error("Too little pixel data! (Corrupt PNG?)"))
+
+    return callback(
+      undefined,
+      new ImageData(pngWidth, pngHeight, pngPixels, pngTrailer)
     )
+  }
 
-  var gz       = zlib.createInflate(),
-      pixels   = new Buffer(width * height * 4),
-      bytes    = Math.ceil(width * depth * samples / 8),
-      scanline = new Buffer(bytes),
-      previous = new Buffer(bytes),
-      samp     = new Array(samples),
-      mul      = 255 / ((1 << depth) - 1),
-      b        = -1,
-      k        = 0,
-      toff     = buf.length,
-      poff     = 0,
-      plen     = 0,
-      aoff     = 0,
-      alen     = 0,
-      filter
+  stream.on("error", error)
+  inflate.on("error", error)
 
-  for(i = bytes; i--; )
-    scanline[i] = 0
+  stream.on("end", end)
+  inflate.on("end", end)
 
-  gz.on("error", callback)
+  stream.on("data", function(data) {
+    /* If an error occurred, bail. */
+    if(!stream.readable)
+      return
 
-  gz.on("data", function(data) {
-    var tmp, i, j, x, off
+    var len = data.length,
+        i   = 0,
+        tmp
 
-    for(i = 0; i !== data.length; ++i) {
-      /* Read filter byte. */
-      if(b === -1) {
-        filter   = data[i]
-        tmp      = previous
-        previous = scanline
-        scanline = tmp
-      }
+    while(i !== len)
+      switch(state) {
+        case 0: /* PNG header */
+          if(data[i++] !== HEADER[off++])
+            return error(new Error("Invalid PNG header."))
 
-      /* Decompress scanline. */
-      else {
-        switch(filter) {
-          /* No filter. */
-          case 0:
-            scanline[b] = data[i]
-            break
+          if(off === HEADER.length) {
+            state = 1
+            off   = 0
+          }
+          break
 
-          /* Delta left. */
-          case 1:
-            scanline[b] = (data[i] + (b < bpp ? 0 : scanline[b - bpp])) & 255
-            break
+        case 1: /* PNG chunk length and type */
+          if(len - i < 8 - off) {
+            data.copy(buf, off, i)
+            off += len - i
+            i    = len
+          }
 
-          /* Delta up. */
-          case 2:
-            scanline[b] = (data[i] + previous[b]) & 255
-            break
+          else {
+            data.copy(buf, off, i, i + 8 - off)
 
-          /* Average left and up. */
-          case 3:
-            scanline[b] = (data[i] +
-              (((b < bpp ? 0 : scanline[b - bpp]) + previous[b]) >> 1)
-            ) & 255
-            break
+            i          += 8 - off
+            off         = 0
+            chunkLength = buf.readUInt32BE(0)
 
-          /* Paeth predictor. */
-          case 4:
-            scanline[b] = (data[i] +
-              (b < bpp ?
-                previous[b] :
-                paeth(scanline[b - bpp], previous[b], previous[b - bpp]))
-            ) & 255
-            break
-
-          default:
-            return callback(new Error("Unsupported scanline filter: " + filter))
-        }
-      }
-
-      /* If we finished reading in a scanline, copy it into the pixel
-       * array. */
-      if(++b === scanline.length) {
-        for(off = 0, x = 0; x !== width; ++x) {
-          /* Read samples. */
-          for(j = 0; j !== samples; ++off, ++j)
-            switch(depth) {
-              case 1:
-                samp[j] = (scanline[(off >> 3)] >> (7 - (off & 7))) & 1
+            switch(buf.toString("ascii", 4, 8)) {
+              case "IHDR":
+                state = 2
                 break
 
-              case 2:
-                samp[j] = (scanline[(off >> 2)] >> ((3 - (off & 3)) << 1)) & 3
+              case "PLTE":
+                /* The PNG spec states that PLTE is only required for type 3.
+                 * It may appear in other types, but is only useful if the
+                 * display does not support true color. Since we're just a data
+                 * storage format, we don't have to worry about it. */
+                if(pngColorType !== 3)
+                  state = 7
+
+                else {
+                  if(chunkLength % 3 !== 0)
+                    return error(new Error("Invalid PLTE size."))
+
+                  pngPaletteEntries = chunkLength / 3
+                  pngPalette        = new Buffer(chunkLength)
+                  state             = 3
+                }
                 break
 
-              case 4:
-                samp[j] = (scanline[(off >> 1)] >> ((1 - (off & 1)) << 2)) & 15
+              case "tRNS":
+                if(pngColorType !== 3)
+                  return error(new Error("tRNS for non-paletted images not yet supported."))
+
+                pngAlphaEntries = chunkLength
+                pngAlpha        = new Buffer(chunkLength)
+                state           = 4
                 break
 
-              case 8:
-                samp[j] = scanline[off]
+              case "IDAT":
+                state = 5
+                break
+
+              case "IEND":
+                state = 6
                 break
 
               default:
-                return callback(new Error("Unsupported bit depth: " + depth))
+                state = 7
+                break
+            }
+          }
+          break
+
+        case 2: /* IHDR */
+          if(chunkLength !== 13)
+            return error(new Error("Invalid IHDR chunk."))
+
+          else if(len - i < chunkLength - off) {
+            data.copy(buf, off, i)
+            off += len - i
+            i    = len
+          }
+
+          else {
+            data.copy(buf, off, i, i + chunkLength - off)
+
+            if(buf.readUInt8(10) !== 0)
+              return error(new Error("Unsupported compression method."))
+
+            if(buf.readUInt8(11) !== 0)
+              return error(new Error("Unsupported filter method."))
+
+            if(buf.readUInt8(12) !== 0)
+              return error(new Error("Unsupported interlace method."))
+
+            i           += chunkLength - off
+            state        = 8
+            off          = 0
+            pngWidth     = buf.readUInt32BE(0)
+            pngHeight    = buf.readUInt32BE(4)
+            pngBitDepth  = buf.readUInt8(8)
+            pngDepthMult = 255 / ((1 << pngBitDepth) - 1)
+            pngColorType = buf.readUInt8(9)
+            pngPixels    = new Buffer(pngWidth * pngHeight * 4)
+
+            switch(pngColorType) {
+              case 0:
+                pngSamplesPerPixel = 1
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.125)
+                break
+
+              case 2:
+                pngSamplesPerPixel = 3
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.375)
+                break
+
+              case 3:
+                pngSamplesPerPixel = 1
+                pngBytesPerPixel   = 1
+                break
+
+              case 4:
+                pngSamplesPerPixel = 2
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.250)
+                break
+
+              case 6:
+                pngSamplesPerPixel = 4
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.5)
+                break
+
+              default:
+                return error(
+                  new Error("Unsupported color type: " + pngColorType)
+                )
             }
 
-          /* Apply samples to the image data. */
-          switch(mode) {
+            pngBytesPerScanline = Math.ceil(
+              pngWidth * pngBitDepth * pngSamplesPerPixel * 0.125
+            )
+            pngSamples          = new Buffer(pngSamplesPerPixel)
+            currentScanline     = new Buffer(pngBytesPerScanline)
+            priorScanline       = new Buffer(pngBytesPerScanline)
+            currentScanline.fill(0)
+          }
+          break
+
+        case 3: /* PLTE */
+          if(len - i < chunkLength - off) {
+            data.copy(pngPalette, off, i)
+            off += len - i
+            i    = len
+          }
+
+          else {
+            data.copy(pngPalette, off, i, i + chunkLength - off)
+            i    += chunkLength - off
+            state = 8
+            off   = 0
+          }
+          break
+
+        case 4: /* tRNS */
+          if(len - i < chunkLength - off) {
+            data.copy(pngAlpha, off, i)
+            off += len - i
+            i    = len
+          }
+
+          else {
+            data.copy(pngAlpha, off, i, i + chunkLength - off)
+            i    += chunkLength - off
+            state = 8
+            off   = 0
+          }
+          break
+
+        case 5: /* IDAT */
+          /* If the amount available is less than the amount remaining, then
+           * feed as much as we can to the inflator. */
+          if(len - i < chunkLength - off) {
+            /* FIXME: Do I need to be smart and check the return value? */
+            inflate.write(data.slice(i))
+            off += len - i
+            i    = len
+          }
+
+          /* Otherwise, write the last bit of the data to the inflator, and
+           * finish processing the chunk. */
+          else {
+            /* FIXME: Do I need to be smart and check the return value? */
+            inflate.write(data.slice(i, i + chunkLength - off))
+            i    += chunkLength - off
+            state = 8
+            off   = 0
+          }
+          break
+
+        case 6: /* IEND */
+          if(chunkLength !== 0)
+            return error(new Error("Invalid IEND chunk."))
+
+          else if(len - i < 4 - off) {
+            off += len - i
+            i    = len
+          }
+
+          else {
+            pngTrailer = new Buffer(0)
+            i         += 4 - off
+            state      = 9
+            off        = 0
+
+            inflate.end()
+          }
+          break
+
+        case 7: /* unrecognized chunk */
+          if(len - i < chunkLength - off) {
+            off += len - i
+            i    = len
+          }
+
+          else {
+            i    += chunkLength - off
+            state = 8
+            off   = 0
+          }
+          break
+
+        case 8: /* chunk crc */
+          /* FIXME: CRC is blatantly ignored */
+          if(len - i < 4 - off) {
+            off += len - i
+            i    = len
+          }
+
+          else {
+            i    += 4 - off
+            state = 1
+            off   = 0
+          }
+          break
+
+        case 9: /* trailing data */
+          /* FIXME: It is inefficient to create a trailer buffer of length zero
+           * and keep reallocating it every time we want to add more data. */
+          tmp = new Buffer(off + len - i)
+          pngTrailer.copy(tmp)
+          data.copy(tmp, off, i, len)
+          pngTrailer = tmp
+          off       += len - i
+          i          = len
+          break
+      }
+  })
+
+  inflate.on("data", function(data) {
+    /* If an error occurred, bail. */
+    if(!inflate.readable)
+      return
+
+    var len = data.length,
+        i, tmp, x, j, k
+
+    for(i = 0; i !== len; ++i) {
+      if(b === -1) {
+        scanlineFilter  = data[i]
+        tmp             = currentScanline
+        currentScanline = priorScanline
+        priorScanline   = tmp
+      }
+
+      else
+        switch(scanlineFilter) {
+          case 0:
+            currentScanline[b] = data[i]
+            break
+
+          case 1:
+            currentScanline[b] =
+              b < pngBytesPerPixel ?
+                data[i] :
+                (data[i] + currentScanline[b - pngBytesPerPixel]) & 255
+            break
+
+          case 2:
+            currentScanline[b] = (data[i] + priorScanline[b]) & 255
+            break
+
+          case 3:
+            currentScanline[b] = (data[i] + ((
+              b < pngBytesPerPixel ?
+                priorScanline[b] :
+                currentScanline[b - pngBytesPerPixel] + priorScanline[b]
+            ) >>> 1)) & 255
+            break
+
+          case 4:
+            currentScanline[b] = (data[i] + (
+              b < pngBytesPerPixel ?
+                priorScanline[b] :
+                paeth(
+                  currentScanline[b - pngBytesPerPixel],
+                  priorScanline[b],
+                  priorScanline[b - pngBytesPerPixel]
+                )
+            )) & 255
+            break
+
+          default:
+            return error(
+              new Error("Unsupported scanline filter: " + scanlineFilter)
+            )
+        }
+
+      if(++b === pngBytesPerScanline) {
+        /* One scanline too many? */
+        if(p === pngPixels.length)
+          return error(new Error("Too much pixel data! (Corrupt PNG?)"))
+
+        /* We have now read a complete scanline, so unfilter it and write it
+         * into the pixel array. */
+        for(j = 0, x = 0; x !== pngWidth; ++x) {
+          /* Read all of the samples into the sample buffer. */
+          for(k = 0; k !== pngSamplesPerPixel; ++j, ++k)
+            switch(pngBitDepth) {
+              case 1:
+                pngSamples[k] =
+                  (currentScanline[(j >>> 3)] >> (7 - (j & 7))) & 1
+                break
+
+              case 2:
+                pngSamples[k] =
+                  (currentScanline[(j >>> 2)] >> ((3 - (j & 3)) << 1)) & 3
+                break
+
+              case 4:
+                pngSamples[k] =
+                  (currentScanline[(j >>> 1)] >> ((1 - (j & 1)) << 2)) & 15
+                break
+
+              case 8:
+                pngSamples[k] = currentScanline[j]
+                break
+
+              default:
+                return error(new Error("Unsupported bit depth: " + pngBitDepth))
+            }
+
+          /* Write the pixel based off of the samples so collected. */
+          switch(pngColorType) {
             case 0:
-              pixels[k++] =
-              pixels[k++] =
-              pixels[k++] = samp[0] * mul
-              pixels[k++] = 255
+              pngPixels[p++] =
+              pngPixels[p++] =
+              pngPixels[p++] = pngSamples[0] * pngDepthMult
+              pngPixels[p++] = 255
               break
 
             case 2:
-              pixels[k++] = samp[0] * mul
-              pixels[k++] = samp[1] * mul
-              pixels[k++] = samp[2] * mul
-              pixels[k++] = 255
+              pngPixels[p++] = pngSamples[0] * pngDepthMult
+              pngPixels[p++] = pngSamples[1] * pngDepthMult
+              pngPixels[p++] = pngSamples[2] * pngDepthMult
+              pngPixels[p++] = 255
               break
 
             case 3:
-              if(samp[0] >= plen)
-                return callback(new Error("Invalid palette index recorded."))
+              if(pngSamples[0] >= pngPaletteEntries)
+                return error(new Error("Invalid palette index."))
 
-              pixels[k++] = buf[poff + samp[0] * 3 + 0]
-              pixels[k++] = buf[poff + samp[0] * 3 + 1]
-              pixels[k++] = buf[poff + samp[0] * 3 + 2]
-              pixels[k++] = samp[0] < alen ? buf[aoff + samp[0]] : 255
+              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 0]
+              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 1]
+              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 2]
+              pngPixels[p++] =
+                pngSamples[0] < pngAlphaEntries ?
+                  pngAlpha[pngSamples[0]] :
+                  255
               break
 
             case 4:
-              pixels[k++] =
-              pixels[k++] =
-              pixels[k++] = samp[0] * mul
-              pixels[k++] = samp[1] * mul
+              pngPixels[p++] =
+              pngPixels[p++] =
+              pngPixels[p++] = pngSamples[0] * pngDepthMult
+              pngPixels[p++] = pngSamples[1] * pngDepthMult
               break
 
             case 6:
-              pixels[k++] = samp[0] * mul
-              pixels[k++] = samp[1] * mul
-              pixels[k++] = samp[2] * mul
-              pixels[k++] = samp[3] * mul
+              pngPixels[p++] = pngSamples[0] * pngDepthMult
+              pngPixels[p++] = pngSamples[1] * pngDepthMult
+              pngPixels[p++] = pngSamples[2] * pngDepthMult
+              pngPixels[p++] = pngSamples[3] * pngDepthMult
               break
           }
         }
@@ -250,54 +489,29 @@ exports.parse = function(buf, callback, debug) {
       }
     }
   })
-
-  gz.on("end", function() {
-    if(k !== pixels.length)
-      return callback(new Error("Copy error: extraneous or insufficient data."))
-
-    return callback(null, new ImageData(width, height, pixels, buf.slice(toff)))
-  })
-
-  /* Run through the PNG data blocks. We need to figure out how much data there
-   * is (so we can allocate a buffer for it), and we need to locate any
-   * palettes and the end of the PNG buffer (in case there's any trailing data
-   * that we need). */
-  outer: for(off = 33; off < buf.length; off += len + 12) {
-    len   = buf.readUInt32BE(off)
-    chunk = buf.readUInt32BE(off + 4)
-
-    switch(chunk) {
-      /* IDAT */
-      case 0x49444154:
-        gz.write(buf.slice(off + 8, off + 8 + len))
-        break
-
-      /* PLTE */
-      case 0x504C5445:
-        poff = off + 8
-        plen = Math.floor(len / 3)
-        break
-
-      /* tRNS */
-      case 0x74524E53:
-        aoff = off + 8
-        alen = len
-        break
-
-      /* IEND */
-      case 0x49454E44:
-        toff = off + len + 12
-        gz.end()
-        break
-    }
-  }
 }
 
 exports.parseFile = function(pathname, callback) {
-  return fs.readFile(pathname, function(err, data) {
-    if(err)
-      return callback(err)
-
-    return exports.parse(data, callback)
-  })
+  return exports.parseStream(fs.createReadStream(pathname), callback)
 }
+
+exports.parseBuffer = function(buf, callback) {
+  /* Create a mock stream. */
+  var s = new stream.Stream()
+
+  /* Set up the destroy functionality. */
+  s.readable = true
+  s.destroy  = function() { s.readable = false }
+
+  /* Set up the PNG parsing hooks. */
+  exports.parseStream(s, callback)
+
+  /* Emit the events needed for parsing. */
+  /* FIXME: Need to test that the callback doesn't get called twice if there's
+   * an error. Do I need to wrap "end" somehow? */
+  s.emit("data", buf)
+  s.emit("end")
+}
+
+/* FIXME: This is deprecated. Remove it in 2.0. */
+exports.parse = exports.parseBuffer
