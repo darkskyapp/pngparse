@@ -68,6 +68,8 @@ exports.parseStream = function(stream, callback) {
   inflate.on("error", error)
 
   stream.on("end", function() {
+    stream.destroy()
+
     if(!pngPixels)
       return error(new Error("Missing IHDR chunk. (Corrupt PNG?)"))
 
@@ -78,6 +80,8 @@ exports.parseStream = function(stream, callback) {
   })
 
   inflate.on("end", function() {
+    inflate.destroy()
+
     if(p !== pngPixels.length)
       return error(new Error("Too little pixel data! (Corrupt PNG?)"))
 
