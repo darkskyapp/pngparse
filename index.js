@@ -51,8 +51,19 @@ exports.parseStream = function(stream, callback) {
       scanlineFilter, pngTrailer, pngPalette, pngAlpha
 
   function error(err) {
-    stream.destroy()
-    inflate.destroy()
+    /* FIXME: stream.destroy no longer exists in node 0.10. I can't actually
+     * find what the right way to say "hey stream, I am no longer going to read
+     * from you ever" or "hey stream, I am never going to write to you ever
+     * again", so I'm really not sure what the right way to handle this is.
+     *
+     * I would appreciate pull requests from somebody who actually understands
+     * how node streams are supposed to function. */
+    if(stream.destroy)
+      stream.destroy()
+
+    if(inflate.destroy)
+      inflate.destroy()
+
     return callback(err)
   }
 
