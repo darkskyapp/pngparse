@@ -91,7 +91,8 @@ exports.parseStream = function(stream, callback) {
   })
 
   inflate.on("end", function() {
-    inflate.destroy()
+    if(inflate.destroy)
+      inflate.destroy()
 
     if(p !== pngPixels.length)
       return error(new Error("Too little pixel data! (Corrupt PNG?)"))
