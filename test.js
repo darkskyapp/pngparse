@@ -13,19 +13,20 @@ describe("PNG", function() {
 
   describe("parseFile", function() {
     it("should error out if given a nonexistent file", function(done) {
-      return png.parseFile(path.join(__dirname, "nonexist.png"), function(err) {
+      return png.parseFile(path.join(__dirname, "data/nonexist.png"), function(err) {
         assert.instanceOf(err, Error)
         done()
       })
     })
 
     it("should correctly parse an 8-bit grayscale png", function(done) {
-      return png.parseFile(path.join(__dirname, "grayscale.png"), function(err, id) {
-        assert.isUndefined(err)
-        assert.equal(id.width, 16)
-        assert.equal(id.height, 16)
-        assert.equal(id.data.length, 16 * 16 * 4)
-        assert.equal(id.trailer.toString(), "Hello, world!\n")
+      return png.parseFile(path.join(__dirname, "data/grayscale.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 16);
+        assert.equal(id.height, 16);
+        assert.equal(id.channels, 1);
+        assert.equal(id.data.length, 16 * 16);
+        assert.equal(id.trailer.toString(), "Hello, world!\n");
 
         var y = 16,
             x
@@ -41,12 +42,13 @@ describe("PNG", function() {
     })
 
     it("should correctly parse an 8-bit truecolor png", function(done) {
-      return png.parseFile(path.join(__dirname, "truecolor.png"), function(err, id) {
-        assert.isUndefined(err)
-        assert.equal(id.width, 16)
-        assert.equal(id.height, 16)
-        assert.equal(id.data.length, 16 * 16 * 4)
-        assert.equal(id.trailer.length, 0)
+      return png.parseFile(path.join(__dirname, "data/truecolor.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 16);
+        assert.equal(id.height, 16);
+        assert.equal(id.channels, 3);
+        assert.equal(id.data.length, 16 * 16 * 3);
+        assert.equal(id.trailer.length, 0);
 
         var y = 16,
             x
@@ -65,12 +67,13 @@ describe("PNG", function() {
     })
 
     it("should correctly parse an 8-bit truecolor png with alpha", function(done) {
-      return png.parseFile(path.join(__dirname, "truecoloralpha.png"), function(err, id) {
-        assert.isUndefined(err)
-        assert.equal(id.width, 16)
-        assert.equal(id.height, 16)
-        assert.equal(id.data.length, 16 * 16 * 4)
-        assert.equal(id.trailer.length, 0)
+      return png.parseFile(path.join(__dirname, "data/truecoloralpha.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 16);
+        assert.equal(id.height, 16);
+        assert.equal(id.channels, 4);
+        assert.equal(id.data.length, 16 * 16 * 4);
+        assert.equal(id.trailer.length, 0);
 
         var y = 16,
             x
@@ -89,12 +92,13 @@ describe("PNG", function() {
     })
 
     it("should correctly read image with scanline filter", function(done) {
-      return png.parseFile(path.join(__dirname, "accum.png"), function(err, id) {
-        assert.isUndefined(err)
-        assert.equal(id.width, 1024)
-        assert.equal(id.height, 1024)
-        assert.equal(id.data.length, 1024 * 1024 * 4)
-        assert.equal(id.trailer.length, 0)
+      return png.parseFile(path.join(__dirname, "data/accum.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 1024);
+        assert.equal(id.height, 1024);
+        assert.equal(id.channels, 3);
+        assert.equal(id.data.length, 1024 * 1024 * 3);
+        assert.equal(id.trailer.length, 0);
 
         assert.equal(id.getPixel(  0,   0), 0xFF0000FF)
         assert.equal(id.getPixel(  1,   0), 0xFF0000FF)
@@ -108,12 +112,13 @@ describe("PNG", function() {
     })
 
     it("should correctly read an indexed color image", function(done) {
-      return png.parseFile(path.join(__dirname, "indexed.png"), function(err, id) {
+      return png.parseFile(path.join(__dirname, "data/indexed.png"), function(err, id) {
         assert.isUndefined(err)
-        assert.equal(id.width, 16)
-        assert.equal(id.height, 16)
-        assert.equal(id.data.length, 16 * 16 * 4)
-        assert.equal(id.trailer.length, 0)
+        assert.equal(id.width, 16);
+        assert.equal(id.height, 16);
+        assert.equal(id.channels, 3);
+        assert.equal(id.data.length, 16 * 16 * 3);
+        assert.equal(id.trailer.length, 0);
 
         var y = 16,
             x
@@ -139,12 +144,13 @@ describe("PNG", function() {
     })
 
     it("should correctly read an indexed color image with alpha", function(done) {
-      return png.parseFile(path.join(__dirname, "indexedalpha.png"), function(err, id) {
-        assert.isUndefined(err)
-        assert.equal(id.width, 16)
-        assert.equal(id.height, 16)
-        assert.equal(id.data.length, 16 * 16 * 4)
-        assert.equal(id.trailer.length, 0)
+      return png.parseFile(path.join(__dirname, "data/indexedalpha.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 16);
+        assert.equal(id.height, 16);
+        assert.equal(id.channels, 4);
+        assert.equal(id.data.length, 16 * 16 * 4);
+        assert.equal(id.trailer.length, 0);
 
         var y = 16,
             x
@@ -173,11 +179,12 @@ describe("PNG", function() {
     })
 
     it("should correctly support crazily-filtered images", function(done) {
-      return png.parseFile(path.join(__dirname, "paeth.png"), function(err, id) {
-        assert.isUndefined(err)
-        assert.equal(id.width, 512)
-        assert.equal(id.height, 512)
-        assert.equal(id.data.length, 512 * 512 * 4)
+      return png.parseFile(path.join(__dirname, "data/paeth.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 512);
+        assert.equal(id.height, 512);
+        assert.equal(id.channels, 4);
+        assert.equal(id.data.length, 512 * 512 * 4);
 
         assert.equal(id.getPixel(  0,   0), 0xFF000000)
         assert.equal(id.getPixel(  1,   0), 0xFF000000)

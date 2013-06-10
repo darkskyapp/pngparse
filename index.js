@@ -3,21 +3,51 @@ var fs     = require("fs"),
     zlib   = require("zlib"),
     HEADER = new Buffer("89504e470d0a1a0a", "hex")
 
-function ImageData(width, height, data, trailer) {
-  this.width   = width
-  this.height  = height
-  this.data    = data
-  this.trailer = trailer
+function ImageData(width, height, channels, data, trailer) {
+  this.width    = width;
+  this.height   = height;
+  this.channels = channels;
+  this.data     = data;
+  this.trailer  = trailer;
 }
 
 ImageData.prototype.getPixel = function(x, y) {
-  x = Math.round(x)
-  y = Math.round(y)
+  x = x|0;
+  y = y|0;
 
   if(x < 0 || y < 0 || x >= this.width || y >= this.height)
-    return 0
+    return 0;
 
-  return this.data.readUInt32BE((y * this.width + x) * 4)
+  var index = (y * this.width + x) * this.channels,
+      r, g, b, a;
+
+  switch(this.channels) {
+    case 1:
+      r = g = b = this.data[index];
+      a = 255;
+      break;
+
+    case 2:
+      r = g = b = this.data[index    ];
+      a         = this.data[index + 1];
+      break;
+
+    case 3:
+      r = this.data[index    ];
+      g = this.data[index + 1];
+      b = this.data[index + 2];
+      a = 255;
+      break;
+
+    case 4:
+      r = this.data[index    ];
+      g = this.data[index + 1];
+      b = this.data[index + 2];
+      a = this.data[index + 3];
+      break;
+  }
+
+  return ((r << 24) | (g << 16) | (b << 8) | a) >>> 0;
 }
 
 function paeth(a, b, c) {
@@ -48,7 +78,7 @@ exports.parseStream = function(stream, callback) {
       chunkLength, pngWidth, pngHeight, pngBitDepth, pngDepthMult,
       pngColorType, pngPixels, pngSamplesPerPixel, pngBytesPerPixel,
       pngBytesPerScanline, pngSamples, currentScanline, priorScanline,
-      scanlineFilter, pngTrailer, pngPalette, pngAlpha
+      scanlineFilter, pngTrailer, pngPalette, pngAlpha, idChannels;
 
   function error(err) {
     /* FIXME: stream.destroy no longer exists in node 0.10. I can't actually
@@ -71,7 +101,7 @@ exports.parseStream = function(stream, callback) {
     if(!--waiting)
       return callback(
         undefined,
-        new ImageData(pngWidth, pngHeight, pngPixels, pngTrailer)
+        new ImageData(pngWidth, pngHeight, idChannels, pngPixels, pngTrailer)
       )
   }
 
@@ -82,10 +112,10 @@ exports.parseStream = function(stream, callback) {
     stream.destroy()
 
     if(!pngPixels)
-      return error(new Error("Missing IHDR chunk. (Corrupt PNG?)"))
+      return error(new Error("Corrupt PNG?"))
 
     if(!pngTrailer)
-      return error(new Error("Missing IEND chunk. (Corrupt PNG?)"))
+      return error(new Error("Corrupt PNG?"))
 
     return end()
   })
@@ -160,14 +190,27 @@ exports.parseStream = function(stream, callback) {
 
               case "tRNS":
                 if(pngColorType !== 3)
-                  return error(new Error("tRNS for non-paletted images not yet supported."))
+                  return error(new Error("tRNS for non-paletted images not yet supported."));
 
-                pngAlphaEntries = chunkLength
-                pngAlpha        = new Buffer(chunkLength)
-                state           = 4
+                /* We only support tRNS on paletted images right now. Since
+                 * those always have 3 samples (RGB), we just add one since now
+                 * they're RGBA. */
+                idChannels       ++;
+
+                pngAlphaEntries = chunkLength;
+                pngAlpha        = new Buffer(chunkLength);
+                state           = 4;
                 break
 
               case "IDAT":
+                /* Allocate the PNG if we havn't yet. (We wait to do it until
+                 * here since tRNS may change idChannels, so we can't be sure of
+                 * the size needed until we hit IDAT. With all that, might as
+                 * well wait until we're actually going to start filling the
+                 * buffer in case of errors...) */
+                if(!pngPixels)
+                  pngPixels = new Buffer(pngWidth * pngHeight * idChannels);
+
                 state = 5
                 break
 
@@ -212,38 +255,42 @@ exports.parseStream = function(stream, callback) {
             pngBitDepth  = buf.readUInt8(8)
             pngDepthMult = 255 / ((1 << pngBitDepth) - 1)
             pngColorType = buf.readUInt8(9)
-            pngPixels    = new Buffer(pngWidth * pngHeight * 4)
 
             switch(pngColorType) {
               case 0:
-                pngSamplesPerPixel = 1
-                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.125)
+                pngSamplesPerPixel = 1;
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.125);
+                idChannels          = 1;
                 break
 
               case 2:
-                pngSamplesPerPixel = 3
-                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.375)
-                break
+                pngSamplesPerPixel = 3;
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.375);
+                idChannels          = 3;
+                break;
 
               case 3:
-                pngSamplesPerPixel = 1
-                pngBytesPerPixel   = 1
+                pngSamplesPerPixel = 1;
+                pngBytesPerPixel   = 1;
+                idChannels          = 3;
                 break
 
               case 4:
-                pngSamplesPerPixel = 2
-                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.250)
+                pngSamplesPerPixel = 2;
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.250);
+                idChannels          = 2;
                 break
 
               case 6:
-                pngSamplesPerPixel = 4
-                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.5)
-                break
+                pngSamplesPerPixel = 4;
+                pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.5);
+                idChannels          = 4;
+                break;
 
               default:
                 return error(
                   new Error("Unsupported color type: " + pngColorType)
-                )
+                );
             }
 
             pngBytesPerScanline = Math.ceil(
@@ -462,49 +509,45 @@ exports.parseStream = function(stream, callback) {
           /* Write the pixel based off of the samples so collected. */
           switch(pngColorType) {
             case 0:
-              pngPixels[p++] =
-              pngPixels[p++] =
-              pngPixels[p++] = pngSamples[0] * pngDepthMult
-              pngPixels[p++] = 255
-              break
+              pngPixels[p++] = pngSamples[0] * pngDepthMult;
+              break;
 
             case 2:
-              pngPixels[p++] = pngSamples[0] * pngDepthMult
-              pngPixels[p++] = pngSamples[1] * pngDepthMult
-              pngPixels[p++] = pngSamples[2] * pngDepthMult
-              pngPixels[p++] = 255
-              break
+              pngPixels[p++] = pngSamples[0] * pngDepthMult;
+              pngPixels[p++] = pngSamples[1] * pngDepthMult;
+              pngPixels[p++] = pngSamples[2] * pngDepthMult;
+              break;
 
             case 3:
               if(pngSamples[0] >= pngPaletteEntries)
-                return error(new Error("Invalid palette index."))
+                return error(new Error("Invalid palette index."));
 
-              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 0]
-              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 1]
-              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 2]
-              pngPixels[p++] =
-                pngSamples[0] < pngAlphaEntries ?
-                  pngAlpha[pngSamples[0]] :
-                  255
-              break
+              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 0];
+              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 1];
+              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 2];
+
+              if(idChannels === 4)
+                pngPixels[p++] =
+                  pngSamples[0] < pngAlphaEntries ?
+                    pngAlpha[pngSamples[0]] :
+                    255;
+              break;
 
             case 4:
-              pngPixels[p++] =
-              pngPixels[p++] =
-              pngPixels[p++] = pngSamples[0] * pngDepthMult
-              pngPixels[p++] = pngSamples[1] * pngDepthMult
-              break
+              pngPixels[p++] = pngSamples[0] * pngDepthMult;
+              pngPixels[p++] = pngSamples[1] * pngDepthMult;
+              break;
 
             case 6:
-              pngPixels[p++] = pngSamples[0] * pngDepthMult
-              pngPixels[p++] = pngSamples[1] * pngDepthMult
-              pngPixels[p++] = pngSamples[2] * pngDepthMult
-              pngPixels[p++] = pngSamples[3] * pngDepthMult
-              break
+              pngPixels[p++] = pngSamples[0] * pngDepthMult;
+              pngPixels[p++] = pngSamples[1] * pngDepthMult;
+              pngPixels[p++] = pngSamples[2] * pngDepthMult;
+              pngPixels[p++] = pngSamples[3] * pngDepthMult;
+              break;
           }
         }
 
-        b = -1
+        b = -1;
       }
     }
   })

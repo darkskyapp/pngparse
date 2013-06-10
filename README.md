@@ -50,5 +50,16 @@ To use:
 
 The `data` object returned from the callback bears a striking resemblance to
 the [HTML5 Canvas ImageData
-object](https://developer.mozilla.org/en-US/docs/DOM/ImageData). The returned
-image is *always* four-channel, even when the PNG under consideration is not.
+object](https://developer.mozilla.org/en-US/docs/DOM/ImageData). A notable
+distinction is that the object returns has a `channels` property which
+indicates how many color channels it uses (while an HTML5 ImageData object is
+always 4-channel). The possible color channel combinations are as follows:
+
+    1 channel : grayscale
+    2 channels: grayscale + alpha
+    3 channels: RGB
+    4 channels: RGBA
+
+If you use the `ImageData.prototype.getPixel` method, this is handled for you;
+however, if you access the `data` array manually, then you will have to be
+aware of it.
