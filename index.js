@@ -137,7 +137,7 @@ exports.parseStream = function(stream, callback) {
 
     var len = data.length,
         i   = 0,
-        tmp
+        tmp, j;
 
     while(i !== len)
       switch(state) {
@@ -192,9 +192,9 @@ exports.parseStream = function(stream, callback) {
                 if(pngColorType !== 3)
                   return error(new Error("tRNS for non-paletted images not yet supported."));
 
-                /* We only support tRNS on paletted images right now. Since
-                 * those always have 3 samples (RGB), we just add one since now
-                 * they're RGBA. */
+                /* We only support tRNS on paletted images right now. Those
+                 * images may either have 1 or 3 channels, but in either case
+                 * we add one for transparency. */
                 idChannels       ++;
 
                 pngAlphaEntries = chunkLength;
@@ -260,31 +260,31 @@ exports.parseStream = function(stream, callback) {
               case 0:
                 pngSamplesPerPixel = 1;
                 pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.125);
-                idChannels          = 1;
+                idChannels         = 1;
                 break
 
               case 2:
                 pngSamplesPerPixel = 3;
                 pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.375);
-                idChannels          = 3;
+                idChannels         = 3;
                 break;
 
               case 3:
                 pngSamplesPerPixel = 1;
                 pngBytesPerPixel   = 1;
-                idChannels          = 3;
+                idChannels         = 3;
                 break
 
               case 4:
                 pngSamplesPerPixel = 2;
                 pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.250);
-                idChannels          = 2;
+                idChannels         = 2;
                 break
 
               case 6:
                 pngSamplesPerPixel = 4;
                 pngBytesPerPixel   = Math.ceil(pngBitDepth * 0.5);
-                idChannels          = 4;
+                idChannels         = 4;
                 break;
 
               default:
@@ -294,7 +294,7 @@ exports.parseStream = function(stream, callback) {
             }
 
             pngBytesPerScanline = Math.ceil(
-              pngWidth * pngBitDepth * pngSamplesPerPixel * 0.125
+              pngWidth * pngBitDepth * pngSamplesPerPixel / 8
             )
             pngSamples          = new Buffer(pngSamplesPerPixel)
             currentScanline     = new Buffer(pngBytesPerScanline)
@@ -315,6 +315,16 @@ exports.parseStream = function(stream, callback) {
             i    += chunkLength - off
             state = 8
             off   = 0
+
+            /* If each entry in the color palette is grayscale, set the channel
+             * count to 1. */
+            idChannels = 1;
+            for(j = pngPaletteEntries; j--; )
+              if(pngPalette[j * 3 + 0] !== pngPalette[j * 3 + 1] ||
+                 pngPalette[j * 3 + 0] !== pngPalette[j * 3 + 2]) {
+                idChannels = 3;
+                break;
+              }
           }
           break
 
@@ -522,15 +532,35 @@ exports.parseStream = function(stream, callback) {
               if(pngSamples[0] >= pngPaletteEntries)
                 return error(new Error("Invalid palette index."));
 
-              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 0];
-              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 1];
-              pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 2];
+              switch(idChannels) {
+                case 1:
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3];
+                  break;
 
-              if(idChannels === 4)
-                pngPixels[p++] =
-                  pngSamples[0] < pngAlphaEntries ?
-                    pngAlpha[pngSamples[0]] :
-                    255;
+                case 2:
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3];
+                  pngPixels[p++] =
+                    pngSamples[0] < pngAlphaEntries ?
+                      pngAlpha[pngSamples[0]] :
+                      255;
+                  break;
+
+                case 3:
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 0];
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 1];
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 2];
+                  break;
+
+                case 4:
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 0];
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 1];
+                  pngPixels[p++] = pngPalette[pngSamples[0] * 3 + 2];
+                  pngPixels[p++] =
+                    pngSamples[0] < pngAlphaEntries ?
+                      pngAlpha[pngSamples[0]] :
+                      255;
+                  break;
+              }
               break;
 
             case 4:

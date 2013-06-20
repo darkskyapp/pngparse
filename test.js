@@ -19,6 +19,28 @@ describe("PNG", function() {
       })
     })
 
+    it("should correctly parse an 1-bit colormap png", function(done) {
+      return png.parseFile(path.join(__dirname, "data/1bit.png"), function(err, id) {
+        assert.isUndefined(err);
+        assert.equal(id.width, 1024);
+        assert.equal(id.height, 1024);
+        assert.equal(id.channels, 1);
+        assert.equal(id.data.length, 1024 * 1024);
+        assert.equal(id.trailer.length, 0);
+
+        var y = 1024,
+            x;
+
+        while(y--) {
+          x = 1024;
+          while(x--)
+            assert.equal(id.getPixel(x, y), 0x000000FF);
+        }
+
+        done();
+      });
+    });
+
     it("should correctly parse an 8-bit grayscale png", function(done) {
       return png.parseFile(path.join(__dirname, "data/grayscale.png"), function(err, id) {
         assert.isUndefined(err);
