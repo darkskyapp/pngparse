@@ -63,3 +63,8 @@ always 4-channel). The possible color channel combinations are as follows:
 If you use the `ImageData.prototype.getPixel` method, this is handled for you;
 however, if you access the `data` array manually, then you will have to be
 aware of it.
+
+License
+=======
+
+This software is available in the public domain.
