@@ -65,6 +65,9 @@ however, if you access the `data` array manually, then you will have to be
 aware of it.
 
 License
-=======
+-------
 
-This software is available in the public domain.
+To the extend possible by law, The Dark Sky Company, LLC has [waived all
+copyright and related or neighboring rights][cc0] to this library.
+
+[cc0]: http://creativecommons.org/publicdomain/zero/1.0/
