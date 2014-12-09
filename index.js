@@ -109,7 +109,8 @@ exports.parseStream = function(stream, callback) {
   inflate.on("error", error)
 
   stream.on("end", function() {
-    stream.destroy()
+    if(stream.destroy)
+      stream.destroy()
 
     if(!pngPixels)
       return error(new Error("Corrupt PNG?"))
