@@ -1,17 +1,17 @@
 pngparse
 ========
 
+**PLEASE NOTE THAT THIS LIBRARY IS NO LONGER ACTIVELY MAINTAINED. USE AT YOUR
+OWN RISK.**
+
+---
+
 `pngparse` is a pure-JavaScript library for [Node.JS](http://nodejs.org/) for
 converting a PNG file into an array of pixel values. It came out of a need for
 reading PNG images in Node.JS for the [Dark Sky
 API](http://developer.darkskyapp.com/), but all existing libraries either had
 compilation issues or did not support enough of the PNG standard to be
 practical.
-
-There's a reason nobody writes PNG-parsing libraries. This stuff is complicated
-and reinventing the wheel is dumb. But, if you're wondering whether you can
-trust it, it has a full unit test suite and we've been using it in production
-since Sep 2012, so there you go.
 
 It's reasonably complete, covering most PNG color types, depths, and filters;
 notable omissions are lack of support for 16-bit images and interlacing.
