@@ -4,6 +4,8 @@ pngparse
 **PLEASE NOTE THAT THIS LIBRARY IS NO LONGER ACTIVELY MAINTAINED. USE AT YOUR
 OWN RISK.**
 
+You can also use other libraries, such as [UPNG.js](https://github.com/photopea/UPNG.js) or [pngjs](https://github.com/lukeapage/pngjs).
+
 ---
 
 `pngparse` is a pure-JavaScript library for [Node.JS](http://nodejs.org/) for
